@@ -11,9 +11,24 @@ class User(db.Model, UserMixin):
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(200), nullable=False)
     role = db.Column(db.String(50), nullable=False)
+    name = db.Column(db.String(100),nullable=False)
     
     def set_password(self, password):
         self.password = generate_password_hash(password)
 
     def check_password(self, password):
         return check_password_hash(self.password, password)
+    
+class Stock(db.Model):
+    __tablename__ = 'stocks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    stock_name = db.Column(db.String(100), nullable=False)
+    price = db.Column(db.Float, nullable=False)
+    quantity = db.Column(db.Integer, nullable=False)
+    weight = db.Column(db.Float, nullable=False)
+    unit = db.Column(db.String(20), nullable=False)
+    
+
+    def __repr__(self):
+        return f"<Stock {self.stock_name}>"

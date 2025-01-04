@@ -2,7 +2,7 @@
 
 from flask import Flask
 from app.config import Config
-from app.extensions import db, migrate, login_manager
+from app.extensions import db, migrate, login_manager, mail
 from app.models import User  # Import the User model
 
 def create_app():
@@ -18,8 +18,11 @@ def create_app():
     login_manager.login_message_category = 'info'
 
     # Register blueprints
-    from app.routes import auth_bp
+    from app.routes import auth_bp, inventory_bp
     app.register_blueprint(auth_bp)
+    app.register_blueprint(inventory_bp)
+
+    mail.init_app(app)
 
     return app
 
