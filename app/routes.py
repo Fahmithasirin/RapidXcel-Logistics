@@ -1,13 +1,16 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
+from flask import Blueprint, jsonify, render_template, request, redirect, session, url_for, flash, abort
 from app import db
-from app.models import Stock, User
+from app.models import Stock, User, Order, OrderItem
 from flask_login import current_user, login_user, login_required, logout_user
 from email_validator import validate_email, EmailNotValidError
 from functools import wraps
-from app.extensions import format_currency
+from app.extensions import format_currency, calculate_shipping_cost, is_pincode_valid
+import logging
 
 auth_bp = Blueprint('auth', __name__)
 inventory_bp = Blueprint('inventory', __name__)
+order_bp = Blueprint('order', __name__)
+logging.basicConfig(level=logging.DEBUG)
 
 # Role-based access control decorator
 def role_required(role):
@@ -120,7 +123,24 @@ def logout():
 @auth_bp.route('/customer_orders')
 @role_required('Customer')
 def customer_orders():
-    return render_template('customer_orders.html')
+    # Fetch available products from the database
+    products = Stock.query.all()
+    logging.debug(f'Products: {products}')
+
+    # Fetch the user's current cart
+    cart = session.get('cart', [])
+    total_cost = sum(item['total_price'] for item in cart)
+    shipping_cost = calculate_shipping_cost(cart)
+    grand_total = total_cost + shipping_cost
+
+    return render_template(
+        'customer_orders.html',
+        products=products,
+        cart=cart,
+        total_cost=total_cost,
+        shipping_cost=shipping_cost,
+        grand_total=grand_total
+    )
 
 @auth_bp.route('/inventory')
 @role_required('Inventory Manager')
@@ -218,3 +238,113 @@ def delete_stock(stock_id):
     db.session.commit()
     flash('Stock deleted successfully!', 'success')
     return redirect(url_for('inventory.inventory_list'))
+
+@order_bp.route('/add_to_cart', methods=['POST'])
+@role_required('Customer')
+def add_to_cart():
+    product_ids = request.form.getlist('product_ids[]')
+    quantities = request.form.getlist('quantities[]')
+
+    cart = session.get('cart', [])
+
+    for product_id, quantity in zip(product_ids, quantities):
+        if not quantity:
+            continue
+
+        product_id = int(product_id)
+        quantity = int(quantity)
+
+        # Fetch product details from the database
+        product = Stock.query.get_or_404(product_id)
+        if quantity > product.quantity:
+            flash(f'Insufficient stock for {product.stock_name}.', 'danger')
+            continue
+
+        # Add to session-based cart
+        cart.append({
+            'product_id': product_id,
+            'product_name': product.stock_name,
+            'quantity': quantity,
+            'total_price': product.price * quantity
+        })
+
+    session['cart'] = cart
+    flash('Products added to your cart.', 'success')
+    return redirect(url_for('order.order_review_page'))
+
+@order_bp.route('/place_order', methods=['POST'])
+@role_required('Customer')
+def place_order():
+    address = request.form['address']
+    pincode = request.form['pincode']
+    phone = request.form['phone']
+
+    if not is_pincode_valid(pincode):
+        flash('Invalid or unserviceable pin code.', 'danger')
+        return redirect(url_for('auth.customer_orders'))
+
+    cart = session.get('cart', [])
+    total_cost = sum(item['total_price'] for item in cart)
+    shipping_cost = calculate_shipping_cost(cart)
+    grand_total = total_cost + shipping_cost
+
+    new_order = Order(
+        customer_id=current_user.id,
+        delivery_address=address,
+        pincode=pincode,
+        phone=phone,
+        total_cost=total_cost,
+        shipping_cost=shipping_cost,
+        grand_total=grand_total
+    )
+
+    db.session.add(new_order)
+    db.session.commit()
+
+    for item in cart:
+        order_item = OrderItem(
+            order_id=new_order.id,
+            stock_id=item['product_id'],
+            quantity=item['quantity'],
+            weight=0,  
+            unit='' 
+        )
+        db.session.add(order_item)
+
+        product = Stock.query.get(item['product_id'])
+        if product:
+            product.quantity -= item['quantity']
+            db.session.add(product)
+
+    db.session.commit()
+    session.pop('cart', None)
+    return render_template('orders/order_confirmation.html', order=new_order, items=cart)
+
+@order_bp.route('/place_order_page')
+@role_required('Customer')
+def place_order_page():
+    products = Stock.query.all()
+    return render_template('orders/place_order.html', products=products)
+
+@order_bp.route('/order_history')
+@role_required('Customer')
+def order_history():
+    orders = Order.query.filter_by(customer_id=current_user.id).all()
+    return render_template('orders/order_history.html', orders=orders)
+
+@order_bp.route('/order_details/<int:order_id>')
+@role_required('Customer')
+def order_details(order_id):
+    order = Order.query.get_or_404(order_id)
+    if order.customer_id != current_user.id:
+        abort(403)
+    return render_template('orders/order_details.html', order=order)
+
+@order_bp.route('/order_review_page')
+@role_required('Customer')
+def order_review_page():
+    cart = session.get('cart', [])
+    total_cost = sum(item['total_price'] for item in cart)
+    shipping_cost = calculate_shipping_cost(cart)
+    grand_total = total_cost + shipping_cost
+    return render_template('orders/order_review.html', cart=cart, total_cost=total_cost, shipping_cost=shipping_cost, grand_total=grand_total)

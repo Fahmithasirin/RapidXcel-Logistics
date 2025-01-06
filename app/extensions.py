@@ -27,5 +27,14 @@ def format_currency(value):
     else:
         formatted_integer = last_three
     
-    # Combine the formatted integer part with the decimal part
     return f"₹{formatted_integer}.{decimal_part}"
+
+def is_pincode_valid(pincode):
+    serviceable_pincodes = ['600001', '600002', '600003']
+    return pincode in serviceable_pincodes
+
+def calculate_shipping_cost(cart):
+    total_weight = sum(item['quantity'] for item in cart)
+    base_cost = 50
+    per_kg_cost = 10
+    return base_cost + (total_weight * per_kg_cost)
