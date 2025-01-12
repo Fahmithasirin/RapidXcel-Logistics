@@ -10,6 +10,7 @@ import logging
 auth_bp = Blueprint('auth', __name__)
 inventory_bp = Blueprint('inventory', __name__)
 order_bp = Blueprint('order', __name__)
+courier_bp = Blueprint('courier', __name__)
 logging.basicConfig(level=logging.DEBUG)
 
 # Role-based access control decorator
@@ -72,10 +73,7 @@ def register():
         elif role == 'Supplier':
             return redirect(url_for('auth.supplier_monitor'))
         elif role == 'Courier Service':
-            return redirect(url_for('auth.courier_shipments'))
-        else:
-            flash('Role not recognized, redirecting to the main page.', 'info')
-            return redirect(url_for('auth.index'))
+            return redirect(url_for('auth.courier_dashboard'))
 
     return render_template('register.html')
 
@@ -101,7 +99,7 @@ def login():
             elif user.role == 'Supplier':
                 return redirect(url_for('auth.supplier_monitor'))
             elif user.role == 'Courier Service':
-                return redirect(url_for('auth.courier_shipments'))
+                return redirect(url_for('auth.courier_dashboard'))
             else: 
                 flash('Role not recognized, redirecting to the main page.', 'info')
                 return redirect(url_for('auth.index'))
@@ -110,8 +108,6 @@ def login():
             flash('Invalid credentials. Please try again.', 'danger')
 
     return render_template('login.html')
-
-
 
 @auth_bp.route('/logout')
 @login_required
@@ -158,10 +154,10 @@ def inventory():
 def supplier_monitor():
     return render_template('supplier_monitor.html')
 
-@auth_bp.route('/courier_shipments')
-@role_required('Courier Service')   
-def courier_shipments():
-    return render_template('courier_shipments.html')
+# @auth_bp.route('/courier_shipments')
+# @role_required('Courier Service')   
+# def courier_shipments():
+#     return render_template('courier_shipments.html')
 
 @inventory_bp.route('/inventory', methods=['GET'])
 @login_required
@@ -348,3 +344,27 @@ def order_review_page():
     shipping_cost = calculate_shipping_cost(cart)
     grand_total = total_cost + shipping_cost
     return render_template('orders/order_review.html', cart=cart, total_cost=total_cost, shipping_cost=shipping_cost, grand_total=grand_total)
+
+@auth_bp.route('/courier_shipments')
+@role_required('Courier Service')
+def courier_dashboard():
+    orders = Order.query.all()
+    return render_template('courier/dashboard.html', orders=orders)
+
+@courier_bp.route('/update_status/<int:order_id>', methods=['POST'])
+@role_required('Courier Service')
+def update_status(order_id):
+    order = Order.query.get_or_404(order_id)
+    new_status = request.form['status']
+    order.status = new_status
+    db.session.commit()
+    flash('Order status updated successfully!', 'success')
+    return redirect(url_for('auth.courier_dashboard'))
+
+@courier_bp.route('/track_delivery/<int:order_id>')
+@role_required('Customer')
+def track_delivery(order_id):
+    order = Order.query.get_or_404(order_id)
+    if order.customer_id != current_user.id:
+        abort(403)
+    return render_template('courier/track_delivery.html', order=order)

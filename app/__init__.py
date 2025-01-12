@@ -18,10 +18,11 @@ def create_app():
     login_manager.login_message_category = 'info'
 
     # Register blueprints
-    from app.routes import auth_bp, inventory_bp, order_bp
+    from app.routes import auth_bp, inventory_bp, order_bp, courier_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(inventory_bp)
     app.register_blueprint(order_bp)
+    app.register_blueprint(courier_bp)
 
     mail.init_app(app)
 

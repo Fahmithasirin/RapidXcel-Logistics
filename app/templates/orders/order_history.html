@@ -19,6 +19,7 @@
             <th>Pin Code</th>
             <th>Phone</th>
             <th>Details</th>
+            <th>Track Delivery</th>
         </tr>
         {% for order in orders %}
         <tr>
@@ -31,6 +32,7 @@
             <td>{{ order.pincode }}</td>
             <td>{{ order.phone }}</td>
             <td><a href="{{ url_for('order.order_details', order_id=order.id) }}">View Details</a></td>
+            <td><a href="{{ url_for('courier.track_delivery', order_id=order.id) }}">Track Delivery</a></td>
         </tr>
         {% endfor %}
     </table>

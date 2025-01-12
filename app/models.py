@@ -7,7 +7,7 @@ class User(db.Model, UserMixin):
     __tablename__ = 'users'
     
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
+    username = db.Column(db.String(80), unique=True, nullable=False, index=True)
     password = db.Column(db.String(200), nullable=False)
     role = db.Column(db.String(50), nullable=False)
     name = db.Column(db.String(100), nullable=False)
@@ -17,7 +17,10 @@ class User(db.Model, UserMixin):
 
     def check_password(self, password):
         return check_password_hash(self.password, password)
-    
+
+    def __repr__(self):
+        return f"<User {self.username}>"
+
 class Stock(db.Model):
     __tablename__ = 'stocks'
 
@@ -40,12 +43,17 @@ class Order(db.Model):
     shipping_cost = db.Column(db.Float, nullable=False)
     grand_total = db.Column(db.Float, nullable=False)
     delivery_address = db.Column(db.String(300), nullable=False)
-    pincode = db.Column(db.String(6), nullable=False)
+    pincode = db.Column(db.String(6), nullable=False, index=True)
     phone = db.Column(db.String(15), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    status = db.Column(db.String(20), default="Processing", nullable=False)
 
     customer = db.relationship('User', backref='customer_orders')
-    items = db.relationship('OrderItem', backref='order_items', lazy=True)
+    items = db.relationship('OrderItem', backref='order_items', lazy=True, cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<Order {self.id}, Status: {self.status}, Customer: {self.customer.name}>"
 
 class OrderItem(db.Model):
     __tablename__ = 'order_items'
@@ -56,4 +64,8 @@ class OrderItem(db.Model):
     quantity = db.Column(db.Integer, nullable=False)
     weight = db.Column(db.Float, nullable=False)
     unit = db.Column(db.String(20), nullable=False)
+
     stock = db.relationship('Stock', backref='stock_orders')
+
+    def __repr__(self):
+        return f"{self.stock.stock_name} - {self.quantity}"
